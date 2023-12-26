@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <utility>
 #include <sstream>
 #include <stdio.h>
@@ -22,8 +23,10 @@ vector<User> users;
 pair<int, int> client[FD_SETSIZE]; // {sockfd, idx}
 fd_set rset, allset;
 char sendBuffer[MAXLINE], rcvBuffer[MAXLINE];
+char _status[3][10] = {"online", "offline", "busy"};
 void processInput(int sockfd, int idx);
 void welcome(int sockfd);
+bool cmp(int a, int b);
 int main(int argc, char* argv[]){
     if(argc != 2){
         cout << "Usage: ./hw2_chat_server [port number]\n";
@@ -171,7 +174,7 @@ void processInput(int sockfd, int idx){
     } else if (command == "logout") {
         string tmp; ss >> tmp;
         if (tmp[0] != '\0') {
-            sprintf(sendBuffer, "Usage: logout.\n");
+            sprintf(sendBuffer, "Usage: logout\n");
         } else if (client[idx].userIdx == -1) {
             sprintf(sendBuffer, "Please login first.\n");
         } else {
@@ -182,7 +185,7 @@ void processInput(int sockfd, int idx){
     } else if (command == "exit"){
         string tmp; ss >> tmp;
         if(tmp[0] != '\0'){
-            sprintf(sendBuffer, "Usage: exit.\n");
+            sprintf(sendBuffer, "Usage: exit\n");
         } else {
             if(client[idx].userIdx != -1){
                 sprintf(sendBuffer, "Bye, %s.\n", users[client[idx].userIdx].username.c_str());
@@ -198,13 +201,49 @@ void processInput(int sockfd, int idx){
     } else if (command == "whoami") {
         string tmp; ss >> tmp;
         if(tmp[0] != '\0'){
-            sprintf(sendBuffer, "Usage: whoami.\n");
+            sprintf(sendBuffer, "Usage: whoami\n");
         } else if (client[idx].userIdx == -1) {
             sprintf(sendBuffer, "Please login first.\n");
         } else {
             sprintf(sendBuffer, "%s\n", users[client[idx].userIdx].username.c_str());
         }
+    } else if (command == "set-status") {
+        string status, tmp; ss >> status >> tmp;
+        if(status[0] == '\0' || tmp[0] != '\0'){
+            sprintf(sendBuffer, "Usage: set-status <status>\n");
+        } else if (client[idx].userIdx == -1) {
+            sprintf(sendBuffer, "Please login first.\n");
+        } else if (status != "busy" && status != "online" && status != "offline"){
+            sprintf(sendBuffer, "set-status failed\n");
+        } else {
+            if(status == "busy") users[client[idx].userIdx].status = BUSY;
+            if(status == "online") users[client[idx].userIdx].status = ONLINE;
+            if(status == "offline") users[client[idx].userIdx].status = OFFLINE;
+            sprintf(sendBuffer, "%s %s\n", users[client[idx].userIdx].username.c_str(), status);
+        }
+    } else if (command == "list-user") {
+        string tmp; ss >> tmp;
+        if(tmp[0] != '\0'){
+            sprintf(sendBuffer, "Usage: list-user\n");
+        } else if (client[idx].userIdx == -1) {
+            sprintf(sendBuffer, "Please login first.\n");
+        } else {
+            vector<int> order;
+            for(int i = 0; i < users.size(); i++) order.push_back(i);
+            sort(order.begin(), order.end(), cmp);
+            for(int i = 0; i < users.size(); i++){
+                sprintf(sendBuffer, "%s%s %s\n", sendBuffer, 
+                    users[order[i]].username.c_str(), _status[users[order[i]].status]);
+            }
+        }
+    } else if () {
+        // TODO
+    } else {
+        sprintf(sendBuffer, "Error: Unknown command\n");
     }
     // for(int i = 0; i < users.size(); i++) users[i].print();
     if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
+}
+bool cmp(int a, int b){
+    return users[a].username < users[b].username;
 }
