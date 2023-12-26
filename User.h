@@ -32,4 +32,8 @@ public:
         loggedin = true;
         status = ONLINE;
     }
+    void logout(){
+        loggedin = false;
+        status = OFFLINE;
+    }
 };

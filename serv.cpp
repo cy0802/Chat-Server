@@ -20,6 +20,7 @@
 using namespace std;
 vector<User> users;
 pair<int, int> client[FD_SETSIZE]; // {sockfd, idx}
+fd_set rset, allset;
 char sendBuffer[MAXLINE], rcvBuffer[MAXLINE];
 void processInput(int sockfd, int idx);
 void welcome(int sockfd);
@@ -32,15 +33,15 @@ int main(int argc, char* argv[]){
 
     int i, maxi, maxfd, listenfd, connfd, sockfd, nready;
     ssize_t n;
-    fd_set rset, allset;
-    
     socklen_t clilen;
     struct sockaddr_in cliaddr, servaddr;
+
     bzero(&cliaddr, sizeof(cliaddr));
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET; // IPv4 
     servaddr.sin_addr.s_addr = INADDR_ANY; 
     servaddr.sin_port = htons(port);
+    
     if((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) errquit("socket");
     int v = 1;
 	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(v));
@@ -120,9 +121,9 @@ void processInput(int sockfd, int idx){
     string command; ss >> command;
     bzero(&sendBuffer, sizeof(sendBuffer));
     if(command == "register"){
-        string username, password;
-        ss >> username >> password;
-        if(username[0] == '\0' || password[0] == '\0'){
+        string username, password, tmp;
+        ss >> username >> password >> tmp;
+        if(username[0] == '\0' || password[0] == '\0' || tmp[0] != '\0'){
             sprintf(sendBuffer, "Usage: register <username> <password>\n");
         } else {
             // check if the username already used
@@ -142,9 +143,9 @@ void processInput(int sockfd, int idx){
             }
         }
     } else if(command == "login"){
-        string username, password;
-        ss >> username >> password;
-        if(username[0] == '\0' || password[0] == '\0'){
+        string username, password, tmp;
+        ss >> username >> password >> tmp;
+        if(username[0] == '\0' || password[0] == '\0' || tmp[0] != '\0'){
             sprintf(sendBuffer, "Usage: login <username> <password>\n");
         } else if(client[idx].userIdx != -1) {
             sprintf(sendBuffer, "Please logout first.\n");
@@ -166,6 +167,42 @@ void processInput(int sockfd, int idx){
                 users[user].login();
                 sprintf(sendBuffer, "Welcome, %s.\n", users[user].username.c_str());
             }
+        }
+    } else if (command == "logout") {
+        string tmp; ss >> tmp;
+        if (tmp[0] != '\0') {
+            sprintf(sendBuffer, "Usage: logout.\n");
+        } else if (client[idx].userIdx == -1) {
+            sprintf(sendBuffer, "Please login first.\n");
+        } else {
+            sprintf(sendBuffer, "Bye, %s.\n", users[client[idx].userIdx].username.c_str());
+            users[client[idx].userIdx].logout();
+            client[idx].userIdx = -1;
+        }
+    } else if (command == "exit"){
+        string tmp; ss >> tmp;
+        if(tmp[0] != '\0'){
+            sprintf(sendBuffer, "Usage: exit.\n");
+        } else {
+            if(client[idx].userIdx != -1){
+                sprintf(sendBuffer, "Bye, %s.\n", users[client[idx].userIdx].username.c_str());
+                if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
+                users[client[idx].userIdx].logout();
+                client[idx].userIdx = -1;
+            }
+            FD_CLR(sockfd, &allset);
+            close(sockfd);
+            client[idx].fd = -1;
+            return;
+        }
+    } else if (command == "whoami") {
+        string tmp; ss >> tmp;
+        if(tmp[0] != '\0'){
+            sprintf(sendBuffer, "Usage: whoami.\n");
+        } else if (client[idx].userIdx == -1) {
+            sprintf(sendBuffer, "Please login first.\n");
+        } else {
+            sprintf(sendBuffer, "%s\n", users[client[idx].userIdx].username.c_str());
         }
     }
     // for(int i = 0; i < users.size(); i++) users[i].print();
