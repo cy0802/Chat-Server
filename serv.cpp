@@ -141,6 +141,33 @@ void processInput(int sockfd, int idx){
                 sprintf(sendBuffer, "Register successfully.\n");
             }
         }
-    } 
+    } else if(command == "login"){
+        string username, password;
+        ss >> username >> password;
+        if(username[0] == '\0' || password[0] == '\0'){
+            sprintf(sendBuffer, "Usage: login <username> <password>\n");
+        } else if(client[idx].userIdx != -1) {
+            sprintf(sendBuffer, "Please logout first.\n");
+        } else {
+            // find the user
+            int user = -1;
+            bool pwdCorrect = false;
+            for(int i = 0; i < users.size(); i++){
+                if(users[i].username == username){
+                    user = i;
+                    if(users[i].password == password) pwdCorrect = true;
+                    break;
+                }
+            }
+            if(user == -1 || pwdCorrect == false || users[user].loggedin == true){
+                sprintf(sendBuffer, "Login failed.\n");
+            } else {
+                client[idx].userIdx = user;
+                users[user].login();
+                sprintf(sendBuffer, "Welcome, %s.\n", users[user].username.c_str());
+            }
+        }
+    }
+    // for(int i = 0; i < users.size(); i++) users[i].print();
     if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
 }

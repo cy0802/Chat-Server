@@ -18,12 +18,18 @@ public:
         username = _username;
         password = _password;
         curChatroom = -1;
-        loggedin = true;
-        status = ONLINE;
+        loggedin = false;
+        status = OFFLINE;
     }
     void print(){
+        std::cout << "============================================\n";
         std::cout << "Username: " << username << "\npassword: " << password
             << "\ncurrent chatroom: " << curChatroom << "\nlog in status: " << loggedin 
             << "\nstatus: " << (status == ONLINE ? "online" : (status == OFFLINE ? "offline" : "busy"));
+        std::cout << "\n============================================\n";
+    }
+    void login(){
+        loggedin = true;
+        status = ONLINE;
     }
 };
