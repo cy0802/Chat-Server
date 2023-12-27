@@ -1,14 +1,19 @@
+#pragma once
 #include <string>
 #include <iostream>
 #include <vector>
 #include "User.h"
 
 class Chatroom{
+public:
     int id;
+    bool active;
     std::string owner;
-    std::vector<User*> users;
+    std::vector<int> users;
     std::string pinnedMsg;
-    std::string history[10]; // only show top 10 record
-    
-    
+    std::vector<std::string> history; // only show top 10 record
+    Chatroom(){
+        active = false;
+        users.clear();
+    }
 };

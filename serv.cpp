@@ -14,18 +14,21 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "User.h"
+#include "Chatroom.h"
 #define errquit(m) {perror(m); exit(-1);}
 #define MAXLINE 200
 #define fd first
 #define userIdx second
 using namespace std;
 vector<User> users;
+vector<Chatroom> chatrooms;
 pair<int, int> client[FD_SETSIZE]; // {sockfd, idx}
 fd_set rset, allset;
 char sendBuffer[MAXLINE], rcvBuffer[MAXLINE];
-char _status[3][10] = {"online", "offline", "busy"};
+string _status[3] = {"online", "offline", "busy"};
 void processInput(int sockfd, int idx);
 void welcome(int sockfd);
+void sendAll(string msg, int roomNum);
 bool cmp(int a, int b);
 int main(int argc, char* argv[]){
     if(argc != 2){
@@ -38,7 +41,8 @@ int main(int argc, char* argv[]){
     ssize_t n;
     socklen_t clilen;
     struct sockaddr_in cliaddr, servaddr;
-
+    
+    chatrooms.resize(101);
     bzero(&cliaddr, sizeof(cliaddr));
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET; // IPv4 
@@ -167,6 +171,7 @@ void processInput(int sockfd, int idx){
                 sprintf(sendBuffer, "Login failed.\n");
             } else {
                 client[idx].userIdx = user;
+                users[user].sockfd = sockfd;
                 users[user].login();
                 sprintf(sendBuffer, "Welcome, %s.\n", users[user].username.c_str());
             }
@@ -180,6 +185,7 @@ void processInput(int sockfd, int idx){
         } else {
             sprintf(sendBuffer, "Bye, %s.\n", users[client[idx].userIdx].username.c_str());
             users[client[idx].userIdx].logout();
+            users[client[idx].userIdx].sockfd = -1;
             client[idx].userIdx = -1;
         }
     } else if (command == "exit"){
@@ -191,6 +197,7 @@ void processInput(int sockfd, int idx){
                 sprintf(sendBuffer, "Bye, %s.\n", users[client[idx].userIdx].username.c_str());
                 if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
                 users[client[idx].userIdx].logout();
+                users[client[idx].userIdx].sockfd = -1;
                 client[idx].userIdx = -1;
             }
             FD_CLR(sockfd, &allset);
@@ -219,7 +226,7 @@ void processInput(int sockfd, int idx){
             if(status == "busy") users[client[idx].userIdx].status = BUSY;
             if(status == "online") users[client[idx].userIdx].status = ONLINE;
             if(status == "offline") users[client[idx].userIdx].status = OFFLINE;
-            sprintf(sendBuffer, "%s %s\n", users[client[idx].userIdx].username.c_str(), status);
+            sprintf(sendBuffer, "%s %s\n", users[client[idx].userIdx].username.c_str(), status.c_str());
         }
     } else if (command == "list-user") {
         string tmp; ss >> tmp;
@@ -233,11 +240,38 @@ void processInput(int sockfd, int idx){
             sort(order.begin(), order.end(), cmp);
             for(int i = 0; i < users.size(); i++){
                 sprintf(sendBuffer, "%s%s %s\n", sendBuffer, 
-                    users[order[i]].username.c_str(), _status[users[order[i]].status]);
+                    users[order[i]].username.c_str(), _status[users[order[i]].status].c_str());
             }
         }
-    } else if () {
-        // TODO
+    } else if (command == "enter-chat-room") {
+        string num, tmp; ss >> num >> tmp;
+        int roomNum = (num[0] != '\0' ? atoi(num.c_str()) : -1);
+        if(num[0] == '\0' || tmp[0] != '\0'){
+            sprintf(sendBuffer, "Usage: enter-chat-room <number>\n");
+        } else if (roomNum < 1 || roomNum > 100) {
+            sprintf(sendBuffer, "Number %d is not valid.\n", roomNum);
+        } else if (client[idx].userIdx == -1) {
+            sprintf(sendBuffer, "Please login first.\n");
+        } else {
+            cout << "enter-chat-room command\n";
+            if (!chatrooms[roomNum].active){
+                chatrooms[roomNum].active = true;
+                chatrooms[roomNum].owner = users[client[idx].userIdx].username;
+                chatrooms[roomNum].id = roomNum;
+            }
+            sprintf(sendBuffer, "Welcome to the public chat room.\nRoom number: %d\nOwner: %s\n", 
+                roomNum, chatrooms[roomNum].owner.c_str());
+            // show history
+            for(int i = 0; i < chatrooms[roomNum].history.size(); i++){
+                sprintf(sendBuffer, "%s%s\n", sendBuffer, chatrooms[roomNum].history[i].c_str());
+            }
+            // send msg to all client
+            string msg = users[client[idx].userIdx].username + " had enter the chat room.\n";
+            sendAll(msg, roomNum);
+            // enter the room
+            chatrooms[roomNum].users.push_back(client[idx].userIdx);
+            users[client[idx].userIdx].curChatroom = roomNum;
+        }
     } else {
         sprintf(sendBuffer, "Error: Unknown command\n");
     }
@@ -246,4 +280,12 @@ void processInput(int sockfd, int idx){
 }
 bool cmp(int a, int b){
     return users[a].username < users[b].username;
+}
+void sendAll(string msg, int chatroomId){
+    char buf[MAXLINE]; bzero(&buf, sizeof(buf));
+    sprintf(buf, "%s", msg.c_str());
+    for(int i = 0; i < chatrooms[chatroomId].users.size(); i++){
+        int userid = chatrooms[chatroomId].users[i];
+        if(write(users[userid].sockfd, buf, strlen(buf)) < 0) errquit("write");
+    }
 }

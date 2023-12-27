@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 #include <iostream>
 enum Status {
@@ -7,6 +8,7 @@ enum Status {
 };
 class User{
 public:
+    int sockfd;
     std::string username;
     std::string password;
     bool loggedin;
