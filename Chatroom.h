@@ -16,4 +16,11 @@ public:
         active = false;
         users.clear();
     }
+    void reset(){
+        active = false;
+        owner = "";
+        users.clear();
+        pinnedMsg = "";
+        history.clear();
+    }
 };

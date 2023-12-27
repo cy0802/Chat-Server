@@ -127,6 +127,7 @@ void processInput(int sockfd, int idx){
     stringstream ss; ss << buf;
     string command; ss >> command;
     bzero(&sendBuffer, sizeof(sendBuffer));
+    bool send = true;
     if(command == "register"){
         string username, password, tmp;
         ss >> username >> password >> tmp;
@@ -285,11 +286,33 @@ void processInput(int sockfd, int idx){
                 }
             }
         }
+    } else if (command == "close-chat-room") {
+        string num, tmp; ss >> num >> tmp;
+        int roomNum = (num[0] != '\0' ? atoi(num.c_str()) : -1);
+        if(num[0] == '\0' || tmp[0] != '\0'){
+            sprintf(sendBuffer, "Usage: close-chat-room <number>\n");
+        } else if (client[idx].userIdx == -1) {
+            sprintf(sendBuffer, "Please login first.\n");
+        } else if (roomNum < 1 || roomNum > 100 || !chatrooms[roomNum].active){
+            sprintf(sendBuffer, "Chat room %d does not exist.\n", roomNum);
+        } else if (chatrooms[roomNum].owner != users[client[idx].userIdx].username) {
+            sprintf(sendBuffer, "Only the owner can close this chat room.\n");
+        } else {
+            // close the chat room
+            string msg = "Chat room " + to_string(roomNum) + " was closed.\n";
+            sendAll(msg, roomNum);
+            send = false;
+            // kick out all users
+            for(int i = 0; i < chatrooms[roomNum].users.size(); i++){
+                users[chatrooms[roomNum].users[i]].curChatroom = -1;
+            }
+            chatrooms[roomNum].reset();
+        }
     } else {
         sprintf(sendBuffer, "Error: Unknown command\n");
     }
     // for(int i = 0; i < users.size(); i++) users[i].print();
-    if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
+    if(send) if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
 }
 bool cmp(int a, int b){
     return users[a].username < users[b].username;
