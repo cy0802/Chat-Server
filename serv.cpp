@@ -272,6 +272,19 @@ void processInput(int sockfd, int idx){
             chatrooms[roomNum].users.push_back(client[idx].userIdx);
             users[client[idx].userIdx].curChatroom = roomNum;
         }
+    } else if (command == "list-chat-room") {
+        string tmp; ss >> tmp;
+        if(tmp[0] != '\0') {
+            sprintf(sendBuffer, "Usage: list-chat-room\n");
+        } else if (client[idx].userIdx == -1) {
+            sprintf(sendBuffer, "Please login first.\n");
+        } else {
+            for(int i = 1; i < chatrooms.size(); i++){
+                if(chatrooms[i].active){
+                    sprintf(sendBuffer, "%s%s %d\n", sendBuffer, chatrooms[i].owner.c_str(), i);
+                }
+            }
+        }
     } else {
         sprintf(sendBuffer, "Error: Unknown command\n");
     }
