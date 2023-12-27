@@ -99,6 +99,7 @@ int main(int argc, char* argv[]){
                     cout << "connection close by client at descriptor " << sockfd << "\n";
                     close(sockfd);
                     FD_CLR(sockfd, &allset);
+                    if(client[i].userIdx != -1) users[client[i].userIdx].logout();
                     client[i].fd = -1;
                     client[i].userIdx = -1;
                 } else {
@@ -254,7 +255,6 @@ void processInput(int sockfd, int idx){
         } else if (client[idx].userIdx == -1) {
             sprintf(sendBuffer, "Please login first.\n");
         } else {
-            cout << "enter-chat-room command\n";
             if (!chatrooms[roomNum].active){
                 chatrooms[roomNum].active = true;
                 chatrooms[roomNum].owner = users[client[idx].userIdx].username;
@@ -264,7 +264,10 @@ void processInput(int sockfd, int idx){
                 roomNum, chatrooms[roomNum].owner.c_str());
             // show history
             for(int i = 0; i < chatrooms[roomNum].history.size(); i++){
-                sprintf(sendBuffer, "%s%s\n", sendBuffer, chatrooms[roomNum].history[i].c_str());
+                sprintf(sendBuffer, "%s%s", sendBuffer, chatrooms[roomNum].history[i].c_str());
+            }
+            if(chatrooms[roomNum].pinnedMsg[0] != '\0'){
+                sprintf(sendBuffer, "%s%s", sendBuffer, chatrooms[roomNum].pinnedMsg.c_str());
             }
             // send msg to all client
             string msg = users[client[idx].userIdx].username + " had enter the chat room.\n";
@@ -308,6 +311,47 @@ void processInput(int sockfd, int idx){
             }
             chatrooms[roomNum].reset();
         }
+    } else if (command == "/pin") {
+        // if users[client[idx].userIdx].curChatroom == -1?
+        int roomNum = users[client[idx].userIdx].curChatroom;
+        string msg = ss.str();
+        msg.erase(0, 5);
+        string sendMsg = "Pin -> [" + users[client[idx].userIdx].username + "]: " + msg;
+        chatrooms[roomNum].pinnedMsg.clear();
+        chatrooms[roomNum].pinnedMsg = sendMsg;
+        sendAll(sendMsg, roomNum);
+        send = false;
+    } else if (command == "/delete-pin") {
+        int roomNum = users[client[idx].userIdx].curChatroom;
+        if(chatrooms[roomNum].pinnedMsg[0] == '\0'){
+            sprintf(sendBuffer, "No pin message in chat room %d\n", roomNum);
+        } else {
+            send = false;
+            chatrooms[roomNum].pinnedMsg.clear();
+        }
+    } else if (command == "/exit-chat-room") { // haven;t test
+        int roomNum = users[client[idx].userIdx].curChatroom;
+        users[client[idx].userIdx].curChatroom = -1;
+        chatrooms[roomNum].users.erase(
+            find(chatrooms[roomNum].users.begin(), chatrooms[roomNum].users.end(), client[idx].userIdx)
+        );
+        string msg = users[client[idx].userIdx].username + " had left the chat room.\n";
+        sendAll(msg, roomNum);
+        send = false;
+    } else if (command == "/list-user") {
+        int roomNum = users[client[idx].userIdx].curChatroom;
+        for (int i = 0; i < chatrooms[roomNum].users.size(); i++){
+            int user = chatrooms[roomNum].users[i];
+            sprintf(sendBuffer, "%s%s %s\n", sendBuffer, users[user].username.c_str(), _status[users[user].status].c_str());
+        }
+    } else if (client[idx].userIdx != -1 && users[client[idx].userIdx].curChatroom != -1 && command[0] != '/') {
+        int roomNum = users[client[idx].userIdx].curChatroom;
+        string record = "[" + users[client[idx].userIdx].username + "]: " + ss.str();
+        if(chatrooms[roomNum].history.size() == 10) 
+            chatrooms[roomNum].history.erase(chatrooms[roomNum].history.begin()); // pop_front
+        chatrooms[roomNum].history.push_back(record);
+        sendAll(record, roomNum);
+        send = false;
     } else {
         sprintf(sendBuffer, "Error: Unknown command\n");
     }
