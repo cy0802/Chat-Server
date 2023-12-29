@@ -30,6 +30,7 @@ void processInput(int sockfd, int idx);
 void welcome(int sockfd);
 void sendAll(string msg, int roomNum);
 bool cmp(int a, int b);
+void filter(string& str);
 int main(int argc, char* argv[]){
     if(argc != 2){
         cout << "Usage: ./hw2_chat_server [port number]\n";
@@ -119,7 +120,7 @@ int main(int argc, char* argv[]){
 
 void welcome(int sockfd){
     bzero(&sendBuffer, sizeof(sendBuffer));
-    sprintf(sendBuffer, "*********************************\n** Welcome to the Chat server. **\n*********************************\n");
+    sprintf(sendBuffer, "*********************************\n** Welcome to the Chat server. **\n*********************************\n%% ");
     if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
 }
 void processInput(int sockfd, int idx){
@@ -128,8 +129,8 @@ void processInput(int sockfd, int idx){
     stringstream ss; ss << buf;
     string command; ss >> command;
     bzero(&sendBuffer, sizeof(sendBuffer));
-    bool send = true;
-    if(command == "register"){
+    bool chatroomMode = client[idx].userIdx == -1 ? false : (users[client[idx].userIdx].curChatroom != -1);
+    if(command == "register" && !chatroomMode){
         string username, password, tmp;
         ss >> username >> password >> tmp;
         if(username[0] == '\0' || password[0] == '\0' || tmp[0] != '\0'){
@@ -151,7 +152,7 @@ void processInput(int sockfd, int idx){
                 sprintf(sendBuffer, "Register successfully.\n");
             }
         }
-    } else if(command == "login"){
+    } else if(command == "login" && !chatroomMode){
         string username, password, tmp;
         ss >> username >> password >> tmp;
         if(username[0] == '\0' || password[0] == '\0' || tmp[0] != '\0'){
@@ -178,7 +179,7 @@ void processInput(int sockfd, int idx){
                 sprintf(sendBuffer, "Welcome, %s.\n", users[user].username.c_str());
             }
         }
-    } else if (command == "logout") {
+    } else if (command == "logout" && !chatroomMode) {
         string tmp; ss >> tmp;
         if (tmp[0] != '\0') {
             sprintf(sendBuffer, "Usage: logout\n");
@@ -190,7 +191,7 @@ void processInput(int sockfd, int idx){
             users[client[idx].userIdx].sockfd = -1;
             client[idx].userIdx = -1;
         }
-    } else if (command == "exit"){
+    } else if (command == "exit" && !chatroomMode){
         string tmp; ss >> tmp;
         if(tmp[0] != '\0'){
             sprintf(sendBuffer, "Usage: exit\n");
@@ -207,7 +208,7 @@ void processInput(int sockfd, int idx){
             client[idx].fd = -1;
             return;
         }
-    } else if (command == "whoami") {
+    } else if (command == "whoami" && !chatroomMode) {
         string tmp; ss >> tmp;
         if(tmp[0] != '\0'){
             sprintf(sendBuffer, "Usage: whoami\n");
@@ -216,7 +217,7 @@ void processInput(int sockfd, int idx){
         } else {
             sprintf(sendBuffer, "%s\n", users[client[idx].userIdx].username.c_str());
         }
-    } else if (command == "set-status") {
+    } else if (command == "set-status" && !chatroomMode) {
         string status, tmp; ss >> status >> tmp;
         if(status[0] == '\0' || tmp[0] != '\0'){
             sprintf(sendBuffer, "Usage: set-status <status>\n");
@@ -230,7 +231,7 @@ void processInput(int sockfd, int idx){
             if(status == "offline") users[client[idx].userIdx].status = OFFLINE;
             sprintf(sendBuffer, "%s %s\n", users[client[idx].userIdx].username.c_str(), status.c_str());
         }
-    } else if (command == "list-user") {
+    } else if (command == "list-user" && !chatroomMode) {
         string tmp; ss >> tmp;
         if(tmp[0] != '\0'){
             sprintf(sendBuffer, "Usage: list-user\n");
@@ -245,7 +246,7 @@ void processInput(int sockfd, int idx){
                     users[order[i]].username.c_str(), _status[users[order[i]].status].c_str());
             }
         }
-    } else if (command == "enter-chat-room") {
+    } else if (command == "enter-chat-room" && !chatroomMode) {
         string num, tmp; ss >> num >> tmp;
         int roomNum = (num[0] != '\0' ? atoi(num.c_str()) : -1);
         if(num[0] == '\0' || tmp[0] != '\0'){
@@ -275,8 +276,9 @@ void processInput(int sockfd, int idx){
             // enter the room
             chatrooms[roomNum].users.push_back(client[idx].userIdx);
             users[client[idx].userIdx].curChatroom = roomNum;
+            chatroomMode = true;
         }
-    } else if (command == "list-chat-room") {
+    } else if (command == "list-chat-room" && !chatroomMode) {
         string tmp; ss >> tmp;
         if(tmp[0] != '\0') {
             sprintf(sendBuffer, "Usage: list-chat-room\n");
@@ -289,7 +291,7 @@ void processInput(int sockfd, int idx){
                 }
             }
         }
-    } else if (command == "close-chat-room") {
+    } else if (command == "close-chat-room" && !chatroomMode) {
         string num, tmp; ss >> num >> tmp;
         int roomNum = (num[0] != '\0' ? atoi(num.c_str()) : -1);
         if(num[0] == '\0' || tmp[0] != '\0'){
@@ -302,61 +304,68 @@ void processInput(int sockfd, int idx){
             sprintf(sendBuffer, "Only the owner can close this chat room.\n");
         } else {
             // close the chat room
-            string msg = "Chat room " + to_string(roomNum) + " was closed.\n";
+            string msg = "Chat room " + to_string(roomNum) + " was closed.\n% ";
+            sprintf(sendBuffer, "Chat room %d was closed.\n", roomNum);
             sendAll(msg, roomNum);
-            send = false;
             // kick out all users
             for(int i = 0; i < chatrooms[roomNum].users.size(); i++){
                 users[chatrooms[roomNum].users[i]].curChatroom = -1;
             }
             chatrooms[roomNum].reset();
         }
-    } else if (command == "/pin") {
+    } else if (command == "/pin" && chatroomMode) {
         // if users[client[idx].userIdx].curChatroom == -1?
         int roomNum = users[client[idx].userIdx].curChatroom;
         string msg = ss.str();
         msg.erase(0, 5);
         string sendMsg = "Pin -> [" + users[client[idx].userIdx].username + "]: " + msg;
+        filter(sendMsg);
         chatrooms[roomNum].pinnedMsg.clear();
         chatrooms[roomNum].pinnedMsg = sendMsg;
         sendAll(sendMsg, roomNum);
-        send = false;
-    } else if (command == "/delete-pin") {
+    } else if (command == "/delete-pin" && chatroomMode) {
         int roomNum = users[client[idx].userIdx].curChatroom;
         if(chatrooms[roomNum].pinnedMsg[0] == '\0'){
             sprintf(sendBuffer, "No pin message in chat room %d\n", roomNum);
         } else {
-            send = false;
             chatrooms[roomNum].pinnedMsg.clear();
         }
-    } else if (command == "/exit-chat-room") { // haven;t test
+    } else if (command == "/exit-chat-room" && chatroomMode) { 
         int roomNum = users[client[idx].userIdx].curChatroom;
         users[client[idx].userIdx].curChatroom = -1;
         chatrooms[roomNum].users.erase(
             find(chatrooms[roomNum].users.begin(), chatrooms[roomNum].users.end(), client[idx].userIdx)
         );
+        cout << "current users in room " << roomNum << ": ";
+        for(auto userid: chatrooms[roomNum].users){
+            cout << users[userid].username << " ";
+        }
+        cout << "\n";
         string msg = users[client[idx].userIdx].username + " had left the chat room.\n";
         sendAll(msg, roomNum);
-        send = false;
-    } else if (command == "/list-user") {
+        chatroomMode = false;
+    } else if (command == "/list-user" && chatroomMode) {
         int roomNum = users[client[idx].userIdx].curChatroom;
-        for (int i = 0; i < chatrooms[roomNum].users.size(); i++){
-            int user = chatrooms[roomNum].users[i];
-            sprintf(sendBuffer, "%s%s %s\n", sendBuffer, users[user].username.c_str(), _status[users[user].status].c_str());
+        sort(chatrooms[roomNum].users.begin(), chatrooms[roomNum].users.end(), cmp);
+        for(int i = 0; i < chatrooms[roomNum].users.size(); i++){
+            int _idx = chatrooms[roomNum].users[i];
+            sprintf(sendBuffer, "%s%s %s\n", sendBuffer, 
+                users[_idx].username.c_str(), _status[users[_idx].status].c_str());
         }
     } else if (client[idx].userIdx != -1 && users[client[idx].userIdx].curChatroom != -1 && command[0] != '/') {
         int roomNum = users[client[idx].userIdx].curChatroom;
-        string record = "[" + users[client[idx].userIdx].username + "]: " + ss.str();
+        string msg = ss.str(); filter(msg);
+        string record = "[" + users[client[idx].userIdx].username + "]: " + msg;
         if(chatrooms[roomNum].history.size() == 10) 
             chatrooms[roomNum].history.erase(chatrooms[roomNum].history.begin()); // pop_front
         chatrooms[roomNum].history.push_back(record);
         sendAll(record, roomNum);
-        send = false;
     } else {
         sprintf(sendBuffer, "Error: Unknown command\n");
     }
     // for(int i = 0; i < users.size(); i++) users[i].print();
-    if(send) if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
+    if(client[idx].userIdx == -1 || !chatroomMode) sprintf(sendBuffer, "%s%% ", sendBuffer);
+    if(sendBuffer[0] != '\0') if(write(sockfd, sendBuffer, strlen(sendBuffer)) < 0) errquit("write");
 }
 bool cmp(int a, int b){
     return users[a].username < users[b].username;
@@ -367,5 +376,36 @@ void sendAll(string msg, int chatroomId){
     for(int i = 0; i < chatrooms[chatroomId].users.size(); i++){
         int userid = chatrooms[chatroomId].users[i];
         if(write(users[userid].sockfd, buf, strlen(buf)) < 0) errquit("write");
+    }
+}
+void filter(string& str){
+    string keywords[5] = {"==", "Superpie", "hello", "Starburst Stream", "Domain Expansion"};
+    for(auto keyword: keywords){
+        int kIdx = 0;
+        bool finding = false;
+        for(int i = 0; i < str.length(); i++){
+            if(!finding && (str[i] == keyword[kIdx] ||
+                    ('a' <= str[i] && str[i] <= 'z' && str[i] == keyword[kIdx] - 'A' + 'a') ||
+                    ('A' <= str[i] && str[i] <= 'Z' && str[i] == keyword[kIdx] - 'a' + 'A'))){
+                finding = true;
+                kIdx++;
+            } else if(finding && kIdx == keyword.length()){
+                // found, replace
+                kIdx = 0;
+                finding = false;
+                str.replace(str.begin() + i - keyword.length(), str.begin() + i, keyword.length(), '*');
+            } else if(finding && str[i] == keyword[kIdx]){
+                kIdx++;
+            } else if(finding && str[i] != keyword[kIdx]){
+                if('a' <= str[i] && str[i] <= 'z' && str[i] == keyword[kIdx] - 'A' + 'a'){
+                    kIdx++;
+                } else if('A' <= str[i] && str[i] <= 'Z' && str[i] == keyword[kIdx] - 'a' + 'A'){
+                    kIdx++;
+                } else {
+                    finding = false;
+                    kIdx = 0;
+                }
+            }
+        }
     }
 }
