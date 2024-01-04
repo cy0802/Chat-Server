@@ -32,8 +32,9 @@ void sendAll(string msg, int roomNum);
 bool cmp(int a, int b);
 void filter(string& str);
 int main(int argc, char* argv[]){
+    // cout << "FD_SIZE: " << FD_SETSIZE << "\n";
     if(argc != 2){
-        cout << "Usage: ./hw2_chat_server [port number]\n";
+        // cout << "Usage: ./hw2_chat_server [port number]\n";
         exit(-1);
     }
     int port = atoi(argv[1]);
@@ -54,7 +55,7 @@ int main(int argc, char* argv[]){
     int v = 1;
 	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(v));
     if(bind(listenfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) errquit("bind");
-    if(listen(listenfd, SOMAXCONN) < 0) errquit("listen");
+    if(listen(listenfd, 4096) < 0) errquit("listen");
     
     // initialize
     maxfd = listenfd;
@@ -65,16 +66,17 @@ int main(int argc, char* argv[]){
     }
     FD_ZERO(&allset);
     FD_SET(listenfd, &allset);
-    cout << "listenfd: " << listenfd << "\n";
+    // cout << "listenfd: " << listenfd << "\n";
     while(1){
         rset = allset;
-        if((nready = select(maxfd+1, &rset, NULL, NULL, NULL)) < 0) errquit("select");
+        struct timeval timeout = {5, 0};
+        if((nready = select(maxfd+1, &rset, NULL, NULL, &timeout)) < 0) errquit("select");
         
         // new client connection
         if(FD_ISSET(listenfd, &rset)){ 
             clilen = sizeof(cliaddr);
             if((connfd = accept(listenfd, (struct sockaddr*)&cliaddr, &clilen)) < 0) errquit("accept");
-            cout << "client connected at descriptor " << connfd << "\n";
+            // cout << "client connected at descriptor " << connfd << "\n";
             welcome(connfd);
             for (i = 0; i < FD_SETSIZE; i++){
                 if (client[i].fd < 0) {
@@ -93,11 +95,11 @@ int main(int argc, char* argv[]){
         for(int i = 0; i <= maxi; i++){
             if((sockfd = client[i].fd) < 0) continue;
             if (FD_ISSET(sockfd, &rset)) {
-                cout << "select sockfd: " << sockfd << "\n";
+                // cout << "select sockfd: " << sockfd << "\n";
                 bzero(&rcvBuffer, sizeof(rcvBuffer));
                 if(n = read(sockfd, rcvBuffer, MAXLINE) == 0){
                     // connection closed by client
-                    cout << "connection close by client at descriptor " << sockfd << "\n";
+                    // cout << "connection close by client at descriptor " << sockfd << "\n";
                     close(sockfd);
                     FD_CLR(sockfd, &allset);
                     if(client[i].userIdx != -1) users[client[i].userIdx].logout();
@@ -107,7 +109,7 @@ int main(int argc, char* argv[]){
                     // process request here
                     if(n < 0) errquit("read");
                     processInput(sockfd, i);
-                    // cout << rcvBuffer << endl;
+                    // // cout << rcvBuffer << endl;
                     // if(send(sockfd, rcvBuffer, strlen(rcvBuffer), 0) < 0) errquit("write"); 
                 }
                 if(--nready <= 0) break;
@@ -336,11 +338,11 @@ void processInput(int sockfd, int idx){
         chatrooms[roomNum].users.erase(
             find(chatrooms[roomNum].users.begin(), chatrooms[roomNum].users.end(), client[idx].userIdx)
         );
-        cout << "current users in room " << roomNum << ": ";
+        // cout << "current users in room " << roomNum << ": ";
         for(auto userid: chatrooms[roomNum].users){
-            cout << users[userid].username << " ";
+            // cout << users[userid].username << " ";
         }
-        cout << "\n";
+        // cout << "\n";
         string msg = users[client[idx].userIdx].username + " had left the chat room.\n";
         sendAll(msg, roomNum);
         chatroomMode = false;

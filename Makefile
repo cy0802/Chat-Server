@@ -1,2 +1,2 @@
-all: serv.cpp User.h
-	g++ -o hw2_chat_server serv.cpp User.h Chatroom.h
+all: hw2_chat_server.cpp User.h
+	g++ -o hw2_chat_server hw2_chat_server.cpp User.h Chatroom.h
